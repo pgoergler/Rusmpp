@@ -380,6 +380,8 @@ impl SubmitSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(SubmitSm, with_short_message_clear);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

@@ -187,6 +187,8 @@ impl CancelSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(CancelSm);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
