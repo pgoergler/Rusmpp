@@ -95,6 +95,11 @@ pub struct CancelSm {
     /// May be set to NULL when the
     /// message_id is provided.
     pub destination_addr: COctetString<1, 21>,
+    /// Optional TLVs (vendor-specific extensions).
+    #[cfg(any(test, feature = "alloc"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+    #[rusmpp(length = "unchecked")]
+    pub tlvs: alloc::vec::Vec<crate::tlvs::owned::Tlv>,
 }
 
 impl CancelSm {
@@ -118,6 +123,8 @@ impl CancelSm {
             dest_addr_ton,
             dest_addr_npi,
             destination_addr,
+            #[cfg(any(test, feature = "alloc"))]
+            tlvs: alloc::vec::Vec::new(),
         }
     }
 
@@ -217,6 +224,6 @@ mod tests {
 
     #[test]
     fn encode_decode() {
-        crate::tests::owned::encode_decode_test_instances::<CancelSm>();
+        crate::tests::owned::encode_decode_with_length_test_instances::<CancelSm>();
     }
 }

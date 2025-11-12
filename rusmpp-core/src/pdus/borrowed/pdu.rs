@@ -91,9 +91,9 @@ pub enum Pdu<'a, const N: usize> {
     ///
     /// If the message_id is NULL, all outstanding undelivered messages with matching source and
     /// destination addresses (and service_type if specified) are cancelled.
-    /// Where the original submit_sm, data_sm or submit_multi ‘source address’ is defaulted to
+    /// Where the original submit_sm, data_sm or submit_multi 'source address' is defaulted to
     /// NULL, then the source address in the cancel_sm command should also be NULL.
-    CancelSm(CancelSm<'a>),
+    CancelSm(CancelSm<'a, N>),
     /// This command is issued by the ESME to replace a previously submitted short message that
     /// is pending delivery. The matching mechanism is based on the message_id and source
     /// address of the original message.
@@ -364,7 +364,7 @@ impl<'a, const N: usize> DecodeWithKeyOptional<'a> for Pdu<'a, N> {
             CommandId::DataSmResp => {
                 DecodeWithLength::decode(src, length).map_decoded(Self::DataSmResp)?
             }
-            CommandId::CancelSm => Decode::decode(src).map_decoded(Self::CancelSm)?,
+            CommandId::CancelSm => CancelSm::decode(src, length).map_decoded(Self::CancelSm)?,
             CommandId::ReplaceSm => {
                 DecodeWithLength::decode(src, length).map_decoded(Self::ReplaceSm)?
             }
