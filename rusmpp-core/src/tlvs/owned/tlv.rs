@@ -85,7 +85,7 @@ impl Tlv {
         let value_length = value.len() as u16;
         let value = TlvValue::Other {
             tag,
-            value: AnyOctetString::new(&value),
+            value: AnyOctetString::new(value),
         };
 
         Self {
