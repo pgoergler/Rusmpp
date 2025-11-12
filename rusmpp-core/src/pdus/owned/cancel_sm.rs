@@ -194,6 +194,8 @@ impl CancelSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(CancelSm);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -222,6 +224,6 @@ mod tests {
 
     #[test]
     fn encode_decode() {
-        crate::tests::owned::encode_decode_test_instances::<CancelSm>();
+        crate::tests::owned::encode_decode_with_length_test_instances::<CancelSm>();
     }
 }
