@@ -336,6 +336,8 @@ impl DeliverSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(DeliverSm, with_short_message_clear);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

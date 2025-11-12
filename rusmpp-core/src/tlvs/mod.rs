@@ -63,6 +63,17 @@
 mod tag;
 pub use tag::*;
 
+#[cfg(any(test, feature = "alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+mod container;
+#[cfg(any(test, feature = "alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+pub use container::*;
+
+#[cfg(any(test, feature = "alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+mod container_macro;
+
 pub mod borrowed;
 #[cfg(any(test, feature = "alloc"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
