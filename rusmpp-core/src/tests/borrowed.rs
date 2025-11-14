@@ -114,7 +114,7 @@ pub fn test_commands() -> alloc::vec::Vec<Command<'static, 16>> {
         .chain_instances_as_cmds::<DeliverSmResp<'static, 16>>()
         .chain_instances_as_cmds::<DataSm<'static, 16>>()
         .chain_instances_as_cmds::<DataSmResp<'static, 16>>()
-        .chain_instances_as_cmds::<CancelSm<'static>>()
+        .chain_instances_as_cmds::<CancelSm<'static, 16>>()
         .chain_instances_as_cmds::<ReplaceSm<'static>>()
         .chain_instances_as_cmds::<SubmitMulti<'static, 16>>()
         .chain_instances_as_cmds::<SubmitMultiResp<'static, 16>>()
