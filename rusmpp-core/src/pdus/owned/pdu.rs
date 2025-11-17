@@ -365,7 +365,9 @@ impl DecodeWithKeyOptional for Pdu {
             CommandId::DataSmResp => {
                 DecodeWithLength::decode(src, length).map_decoded(Self::DataSmResp)?
             }
-            CommandId::CancelSm => Decode::decode(src).map_decoded(Self::CancelSm)?,
+            CommandId::CancelSm => {
+                DecodeWithLength::decode(src, length).map_decoded(Self::CancelSm)?
+            }
             CommandId::ReplaceSm => {
                 DecodeWithLength::decode(src, length).map_decoded(Self::ReplaceSm)?
             }

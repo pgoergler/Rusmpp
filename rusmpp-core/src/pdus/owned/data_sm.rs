@@ -208,6 +208,8 @@ impl DataSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(DataSm);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

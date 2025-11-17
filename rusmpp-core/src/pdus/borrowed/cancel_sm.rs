@@ -22,7 +22,7 @@ use crate::{
 #[rusmpp(decode = borrowed, test = skip)]
 #[cfg_attr(feature = "arbitrary", derive(::arbitrary::Arbitrary))]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize))]
-pub struct CancelSm<'a> {
+pub struct CancelSm<'a, const N: usize> {
     /// Set to indicate SMS Application service,
     /// if cancellation of a group of application
     /// service messages is desired.
@@ -94,9 +94,13 @@ pub struct CancelSm<'a> {
     /// May be set to NULL when the
     /// message_id is provided.
     pub destination_addr: COctetString<'a, 1, 21>,
+    /// Optional TLVs (vendor-specific extensions).
+    #[rusmpp(length = "unchecked")]
+    #[cfg_attr(feature = "arbitrary", arbitrary(default))]
+    tlvs: heapless::vec::Vec<crate::tlvs::borrowed::Tlv<'a>, N>,
 }
 
-impl<'a> CancelSm<'a> {
+impl<'a, const N: usize> CancelSm<'a, N> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         service_type: ServiceType<'a>,
@@ -117,26 +121,27 @@ impl<'a> CancelSm<'a> {
             dest_addr_ton,
             dest_addr_npi,
             destination_addr,
+            tlvs: heapless::vec::Vec::new(),
         }
     }
 
-    pub fn builder() -> CancelSmBuilder<'a> {
+    pub fn builder() -> CancelSmBuilder<'a, N> {
         CancelSmBuilder::new()
     }
 }
 
-impl<'a, const N: usize> From<CancelSm<'a>> for Pdu<'a, N> {
-    fn from(value: CancelSm<'a>) -> Self {
+impl<'a, const N: usize> From<CancelSm<'a, N>> for Pdu<'a, N> {
+    fn from(value: CancelSm<'a, N>) -> Self {
         Self::CancelSm(value)
     }
 }
 
 #[derive(Debug, Default)]
-pub struct CancelSmBuilder<'a> {
-    inner: CancelSm<'a>,
+pub struct CancelSmBuilder<'a, const N: usize> {
+    inner: CancelSm<'a, N>,
 }
 
-impl<'a> CancelSmBuilder<'a> {
+impl<'a, const N: usize> CancelSmBuilder<'a, N> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -181,7 +186,7 @@ impl<'a> CancelSmBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> CancelSm<'a> {
+    pub fn build(self) -> CancelSm<'a, N> {
         self.inner
     }
 }
@@ -192,7 +197,7 @@ mod tests {
 
     use super::*;
 
-    impl TestInstance for CancelSm<'_> {
+    impl TestInstance for CancelSm<'_, 16> {
         fn instances() -> alloc::vec::Vec<Self> {
             alloc::vec![
                 Self::default(),
@@ -212,6 +217,6 @@ mod tests {
 
     #[test]
     fn encode_decode() {
-        crate::tests::borrowed::encode_decode_test_instances::<CancelSm>();
+        crate::tests::borrowed::encode_decode_with_length_test_instances::<CancelSm<16>>();
     }
 }
