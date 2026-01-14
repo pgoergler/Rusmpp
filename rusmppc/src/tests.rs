@@ -1,3 +1,9 @@
+//! Tests in this module test the library's functionality based on the public API.
+//!
+//! They simulate real scenarios by creating in-memory connections between a test server and a client built using the library's public API.
+//!
+//! For more in depth tests, see `connection/tests.rs`.
+
 use std::time::{Duration, Instant};
 
 use futures::{SinkExt, StreamExt};
@@ -171,9 +177,11 @@ impl UnbindServer {
     }
 }
 
-fn init_tracing() {
+pub fn init_tracing() {
     _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_line_number(true)
+        .with_ansi(false)
         .try_init();
 }
 
@@ -650,6 +658,7 @@ async fn server_sends_an_operation_with_the_same_sequence_number_of_a_pending_re
     let _ = events.await;
 }
 
+/// See `server_ddos_client_should_still_send_requests_and_connection_should_still_manage_timeouts` in `connection/tests.rs`` for a more reliable test of the same behavior.
 #[tokio::test]
 async fn server_ddos_client_should_still_send_requests_and_connection_should_still_manage_timeouts()
 {
@@ -726,4 +735,69 @@ async fn enquire_link_interval_none_should_not_send_enquire_link_commands() {
 
     // after 3 seconds the connection should still be active since no enquire link commands were sent
     assert!(client.is_active(), "Connection was closed unexpectedly");
+}
+
+/// The connection should not treat the enquire link response as a response to an enquire link sent by the connection.
+///
+/// The response should be passed to the client to handle it.
+#[tokio::test]
+async fn client_sends_enquire_link_connection_should_pass_response_to_client() {
+    init_tracing();
+
+    let (server, client) = tokio::io::duplex(1024);
+
+    tokio::spawn(async move {
+        Server::new().run(server).await;
+    });
+
+    let (client, events) = ConnectionBuilder::new()
+        .enquire_link_interval(Duration::from_millis(10))
+        .connected(client);
+
+    // Wait for the automatic enquire link to be sent
+    // We can not guarantee that an enquire link with seq (x) was sent before we send our own with seq (y) while the connection is still waiting for the response with seq (x)
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    client
+        .enquire_link()
+        .await
+        .expect("Failed to send enquire_link");
+
+    client.close().await.expect("Failed to close connection");
+
+    client.closed().await;
+
+    let _ = events.count().await;
+}
+
+#[tokio::test]
+async fn disabled_auto_enquire_link_response_should_pipe_enquire_link_through_events() {
+    init_tracing();
+
+    let (server, client) = tokio::io::duplex(1024);
+
+    tokio::spawn(async move {
+        let mut framed = Framed::new(server, CommandCodec::new());
+
+        framed
+            .send(
+                Command::builder()
+                    .status(CommandStatus::EsmeRok)
+                    .sequence_number(1)
+                    .pdu(Pdu::EnquireLink),
+            )
+            .await
+            .expect("Failed to send EnquireLink");
+    });
+
+    let (_client, mut events) = ConnectionBuilder::new()
+        .disable_auto_enquire_link_response()
+        .connected(client);
+
+    // The enquire link request should be sent to the event stream
+    let Some(Event::Incoming(command)) = events.next().await else {
+        panic!("Expected command event");
+    };
+
+    assert!(matches!(command.id(), CommandId::EnquireLink));
 }

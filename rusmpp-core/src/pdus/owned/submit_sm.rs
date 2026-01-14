@@ -68,7 +68,7 @@ pub struct SubmitSm {
     pub registered_delivery: RegisteredDelivery,
     /// Flag indicating if the submitted message should replace an existing message.
     pub replace_if_present_flag: ReplaceIfPresentFlag,
-    // Defines the encoding scheme of the short message user data.
+    /// Defines the encoding scheme of the short message user data.
     pub data_coding: DataCoding,
     /// Indicates the short message to send from a list of pre- defined (‘canned’)
     /// short messages stored on the MC. If not using a MC canned message, set to NULL.
@@ -90,6 +90,32 @@ pub struct SubmitSm {
 }
 
 impl SubmitSm {
+    /// The default maximum size of the short message in bytes (octets).
+    const DEFAULT_MAX_SHORT_MESSAGE_SIZE: usize = 140;
+
+    /// Returns the default maximum size of the short message in bytes (octets).
+    ///
+    /// # Note
+    ///
+    /// Depending on the [`DataCoding`] used, the amount of characters* `(not bytes)`
+    /// that can fit in a short message may vary.
+    ///
+    /// * `GSM 7-bit` encoding allows for up to `160` characters in `140` bytes.
+    ///   `GSM 7-bit` encoding performs character packing to fit more characters in less bytes.
+    ///   The formula to calculate the maximum number of characters is: `(bytes * 8) / 7`.
+    ///   Therefore the maximum number of characters is: `(140 * 8) / 7 = 160`.
+    /// * `GSM 7-bit unpacked` encoding allows for up to `140` characters in `140` bytes.
+    ///   `GSM 7-bit unpacked` does not perform character packing, so each character takes up to `2` bytes.
+    ///   In the worst case, each character may require an escape character `(0x1B)` followed by the actual character byte,
+    ///   ending up fitting only `70` characters in `140` bytes.
+    /// * `UCS2` encoding allows for up to `70` characters in `140` bytes.
+    /// * `ISO-8859-1` encoding allows for up to `140` characters in `140` bytes.
+    ///
+    /// `*` A character is a single textual unit, which may be represented by one or more bytes depending on the encoding scheme.
+    pub const fn default_max_short_message_size() -> usize {
+        Self::DEFAULT_MAX_SHORT_MESSAGE_SIZE
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         service_type: ServiceType,
@@ -202,6 +228,26 @@ impl SubmitSm {
     pub fn builder() -> SubmitSmBuilder {
         SubmitSmBuilder::new()
     }
+
+    /// Sets the [`SubmitSm::data_coding`].
+    pub fn with_data_coding(mut self, data_coding: DataCoding) -> Self {
+        self.data_coding = data_coding;
+        self
+    }
+
+    /// Sets the UDH Indicator bit in the GSM Features field of the [`SubmitSm::esm_class`].
+    pub fn with_udhi_indicator(mut self) -> Self {
+        self.esm_class = self.esm_class.with_udhi_indicator();
+        self
+    }
+
+    /// Sets the [`SubmitSm::short_message`] and [`SubmitSm::sm_length`](SubmitSm::sm_length).
+    ///
+    /// See [`SubmitSm::set_short_message`] for details.
+    pub fn with_short_message(mut self, short_message: OctetString<0, 255>) -> Self {
+        self.set_short_message(short_message);
+        self
+    }
 }
 
 impl From<SubmitSm> for Pdu {
@@ -210,7 +256,7 @@ impl From<SubmitSm> for Pdu {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SubmitSmBuilder {
     inner: SubmitSm,
 }
@@ -334,6 +380,8 @@ impl SubmitSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(SubmitSm, with_short_message_clear);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -365,14 +413,14 @@ mod tests {
                     .protocol_id(0)
                     .priority_flag(PriorityFlag::from(PriorityFlagType::from(Ansi136::Bulk)))
                     .schedule_delivery_time(
-                        EmptyOrFullCOctetString::new(b"2023-09-01T12:00\0").unwrap(),
+                        EmptyOrFullCOctetString::new(b"2023-09-01T12:00\0".to_vec()).unwrap(),
                     )
                     .validity_period(EmptyOrFullCOctetString::from_str("2023-10-01T12:00").unwrap())
                     .registered_delivery(RegisteredDelivery::request_all())
                     .replace_if_present_flag(ReplaceIfPresentFlag::Replace)
                     .data_coding(DataCoding::Ksc5601)
                     .sm_default_msg_id(69)
-                    .short_message(OctetString::new(b"Short Message").unwrap())
+                    .short_message(OctetString::new(b"Short Message".to_vec()).unwrap())
                     .build(),
                 Self::builder()
                     .service_type(ServiceType::new(
@@ -380,10 +428,10 @@ mod tests {
                     ))
                     .source_addr_ton(Ton::International)
                     .source_addr_npi(Npi::Isdn)
-                    .source_addr(COctetString::new(b"Source Address\0").unwrap())
+                    .source_addr(COctetString::new(b"Source Address\0".to_vec()).unwrap())
                     .dest_addr_ton(Ton::International)
                     .dest_addr_npi(Npi::Isdn)
-                    .destination_addr(COctetString::new(b"Destination Address\0").unwrap())
+                    .destination_addr(COctetString::new(b"Destination Address\0".to_vec()).unwrap())
                     .esm_class(EsmClass::new(
                         MessagingMode::Default,
                         MessageType::ShortMessageContainsIntermediateDeliveryNotification,
@@ -395,25 +443,25 @@ mod tests {
                         Ansi136::VeryUrgent,
                     )))
                     .schedule_delivery_time(
-                        EmptyOrFullCOctetString::new(b"2023-09-01T12:01\0").unwrap(),
+                        EmptyOrFullCOctetString::new(b"2023-09-01T12:01\0".to_vec()).unwrap(),
                     )
                     .validity_period(EmptyOrFullCOctetString::from_str("2023-10-01T12:20").unwrap())
                     .registered_delivery(RegisteredDelivery::request_all())
                     .replace_if_present_flag(ReplaceIfPresentFlag::DoNotReplace)
                     .data_coding(DataCoding::Jis)
                     .sm_default_msg_id(96)
-                    .short_message(OctetString::new(b"Short Message").unwrap())
+                    .short_message(OctetString::new(b"Short Message".to_vec()).unwrap())
                     .tlvs(alloc::vec![
                         MessageSubmissionRequestTlvValue::MessagePayload(MessagePayload::new(
-                            AnyOctetString::new(b"Message Payload")
+                            AnyOctetString::new(b"Message Payload".to_vec())
                         ),)
                     ])
                     .build(),
                 Self::builder()
-                    .short_message(OctetString::new(b"Short Message").unwrap())
+                    .short_message(OctetString::new(b"Short Message".to_vec()).unwrap())
                     .tlvs(alloc::vec![
                         MessageSubmissionRequestTlvValue::MessagePayload(MessagePayload::new(
-                            AnyOctetString::new(b"Message Payload"),
+                            AnyOctetString::new(b"Message Payload".to_vec()),
                         )),
                         MessageSubmissionRequestTlvValue::UserResponseCode(3),
                         MessageSubmissionRequestTlvValue::DestBearerType(BearerType::FlexReFlex),
@@ -434,7 +482,7 @@ mod tests {
 
     #[test]
     fn short_message_length() {
-        let short_message = OctetString::new(b"Short Message").unwrap();
+        let short_message = OctetString::new(b"Short Message".to_vec()).unwrap();
 
         let submit_sm = SubmitSm::builder()
             .short_message(short_message.clone())
@@ -446,8 +494,8 @@ mod tests {
 
     #[test]
     fn short_message_override() {
-        let short_message_1 = OctetString::new(b"Short Message 101").unwrap();
-        let short_message_2 = OctetString::new(b"Short Message 2").unwrap();
+        let short_message_1 = OctetString::new(b"Short Message 101".to_vec()).unwrap();
+        let short_message_2 = OctetString::new(b"Short Message 2".to_vec()).unwrap();
 
         let submit_sm = SubmitSm::builder()
             .short_message(short_message_1)
@@ -460,8 +508,8 @@ mod tests {
 
     #[test]
     fn message_payload_suppresses_short_message() {
-        let short_message = OctetString::new(b"Short Message").unwrap();
-        let message_payload = MessagePayload::new(AnyOctetString::new(b"Message Payload"));
+        let short_message = OctetString::new(b"Short Message".to_vec()).unwrap();
+        let message_payload = MessagePayload::new(AnyOctetString::new(b"Message Payload".to_vec()));
 
         // Using push_tlv
         let submit_sm = SubmitSm::builder()

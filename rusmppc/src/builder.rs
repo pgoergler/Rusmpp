@@ -1,13 +1,14 @@
 use std::{net::SocketAddr, time::Duration};
 
-use futures::{FutureExt, Stream};
-
+use futures::Stream;
+use rusmpp::tokio_codec::CommandCodec;
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncWrite},
     net::TcpStream,
 };
+use tokio_util::codec::Framed;
 
-use crate::{Client, Connection, Event, MaybeTlsStream, error::Error};
+use crate::{Client, Event, MaybeTlsStream, delay::TokioDelay, error::Error};
 
 /// Builder for creating a new `SMPP` connection.
 #[derive(Debug)]
@@ -16,6 +17,8 @@ pub struct ConnectionBuilder {
     pub(crate) enquire_link_interval: Option<Duration>,
     /// Timeout for waiting for a an enquire link response from the server.
     pub(crate) enquire_link_response_timeout: Duration,
+    /// Whether to automatically respond to enquire link requests from the server.
+    pub(crate) auto_enquire_link_response: bool,
     /// Timeout for waiting for a response from the server.
     pub(crate) response_timeout: Option<Duration>,
     pub(crate) check_interface_version: bool,
@@ -40,6 +43,7 @@ impl ConnectionBuilder {
     /// - `max_command_length`: 4096 bytes
     /// - `enquire_link_interval`: 30 seconds
     /// - `enquire_link_response_timeout`: 5 seconds
+    /// - `auto_enquire_link_response`: true
     /// - `response_timeout`: 5 seconds
     /// - `check_interface_version`: true
     /// - `rustls_config`: default configuration will be used if TLS is enabled. See [`rustls_config`](Self::rustls_config) for more details.
@@ -49,6 +53,7 @@ impl ConnectionBuilder {
             max_command_length: 4096,
             enquire_link_interval: Some(Duration::from_secs(30)),
             enquire_link_response_timeout: Duration::from_secs(5),
+            auto_enquire_link_response: true,
             response_timeout: Some(Duration::from_secs(5)),
             check_interface_version: true,
             #[cfg(feature = "rustls")]
@@ -100,7 +105,7 @@ impl ConnectionBuilder {
     ///
     /// # Supported URL schemes
     /// - `smpp`: Connect using plain TCP.
-    /// - `ssmpp` or `smpps`: Connect using TLS. Requires the `rustls` feature to be enabled.
+    /// - `ssmpp` or `smpps`: Connect using TLS. Requires the `rustls` or `native-tls` features to be enabled.
     ///
     /// # Notes
     /// - If no port is specified in the URL, the default port `2775` will be used.
@@ -115,7 +120,7 @@ impl ConnectionBuilder {
     /// - If the URL does not have a host.
     /// - If DNS resolution fails.
     /// - If the connection to the server fails.
-    /// - If TLS is enabled (when using `ssmpp` or `smpps` schemes) but the `rustls` feature is not enabled.
+    /// - If TLS is enabled (when using `ssmpp` or `smpps` schemes) but the `rustls` or `native-tls` features are not enabled.
     /// - If TLS handshake fails.
     pub async fn connect(
         self,
@@ -185,6 +190,34 @@ impl ConnectionBuilder {
         enquire_link_response_timeout: Duration,
     ) -> Self {
         self.enquire_link_response_timeout = enquire_link_response_timeout;
+        self
+    }
+
+    /// Enables automatic responses to enquire link requests from the server.
+    ///
+    /// See [`with_auto_enquire_link_response`](Self::with_auto_enquire_link_response) for more details.
+    pub fn enable_auto_enquire_link_response(mut self) -> Self {
+        self.auto_enquire_link_response = true;
+        self
+    }
+
+    /// Disables automatic responses to enquire link requests from the server.
+    ///
+    /// See [`with_auto_enquire_link_response`](Self::with_auto_enquire_link_response) for more details.
+    pub fn disable_auto_enquire_link_response(mut self) -> Self {
+        self.auto_enquire_link_response = false;
+        self
+    }
+
+    /// Sets whether to automatically respond to enquire link requests from the server.
+    ///
+    /// By default, this is set to `true`.
+    ///
+    /// When enabled, the connection will automatically respond to any enquire link requests received from the server.
+    ///
+    /// When disabled, the client will need to handle enquire link requests manually. The [`EnquireLink`](rusmpp::Pdu::EnquireLink) command will be received as an event in the event stream.
+    pub fn with_auto_enquire_link_response(mut self, auto: bool) -> Self {
+        self.auto_enquire_link_response = auto;
         self
     }
 
@@ -267,7 +300,7 @@ impl ConnectionBuilder {
 /// Builder for creating a new `SMPP` connection without spawning it in the background.
 #[derive(Debug)]
 pub struct NoSpawnConnectionBuilder {
-    builder: ConnectionBuilder,
+    pub(crate) builder: ConnectionBuilder,
 }
 
 impl NoSpawnConnectionBuilder {
@@ -415,32 +448,11 @@ impl NoSpawnConnectionBuilder {
     where
         S: AsyncRead + AsyncWrite + Send + 'static,
     {
-        let (connection, watch, actions, events) = Connection::new(
-            self.builder.max_command_length,
-            self.builder.enquire_link_interval,
-            self.builder.enquire_link_response_timeout,
+        let framed = Framed::new(
+            stream,
+            CommandCodec::new().with_max_length(self.builder.max_command_length),
         );
 
-        let client = Client::new(
-            actions,
-            self.builder.response_timeout,
-            self.builder.check_interface_version,
-            watch,
-        );
-
-        (client, events, async move {
-            let mut stream = std::pin::pin!(stream);
-
-            let connection = connection.with_stream(&mut stream);
-
-            // See comments on Connection struct to understand why we fuse the connection future.
-            connection.fuse().await;
-
-            tracing::debug!(target: "rusmppc::connection::tcp", "Shutting down stream");
-
-            if let Err(err) = stream.shutdown().await {
-                tracing::error!(target: "rusmppc::connection::tcp", ?err, "Failed to shutdown stream");
-            }
-        })
+        self.raw(framed, TokioDelay::new(), TokioDelay::new())
     }
 }

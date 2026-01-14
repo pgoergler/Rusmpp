@@ -70,7 +70,7 @@ pub struct DeliverSm {
     pub registered_delivery: RegisteredDelivery,
     /// Flag indicating if the submitted message should replace an existing message.
     pub replace_if_present_flag: ReplaceIfPresentFlag,
-    // Defines the encoding scheme of the short message user data.
+    /// Defines the encoding scheme of the short message user data.
     pub data_coding: DataCoding,
     /// Indicates the short message to send from a list of pre- defined (‘canned’)
     /// short messages stored on the MC. If not using a MC canned message, set to NULL.
@@ -336,6 +336,8 @@ impl DeliverSmBuilder {
     }
 }
 
+crate::impl_tlv_container!(DeliverSm, with_short_message_clear);
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -359,7 +361,7 @@ mod tests {
                     .validity_period(EmptyOrFullCOctetString::empty())
                     .registered_delivery(RegisteredDelivery::default())
                     .replace_if_present_flag(ReplaceIfPresentFlag::Replace)
-                    .short_message(OctetString::new(b"Short Message").unwrap())
+                    .short_message(OctetString::new(b"Short Message".to_vec()).unwrap())
                     .build(),
                 Self::builder()
                     .source_addr_ton(Ton::International)
@@ -375,13 +377,13 @@ mod tests {
                     .replace_if_present_flag(ReplaceIfPresentFlag::Replace)
                     .data_coding(DataCoding::default())
                     .sm_default_msg_id(0)
-                    .short_message(OctetString::new(b"Short Message").unwrap())
+                    .short_message(OctetString::new(b"Short Message".to_vec()).unwrap())
                     .tlvs(alloc::vec![
                         MessageDeliveryRequestTlvValue::MessagePayload(MessagePayload::new(
-                            AnyOctetString::new(b"Message Payload"),
+                            AnyOctetString::new(b"Message Payload".to_vec()),
                         )),
                         MessageDeliveryRequestTlvValue::MessagePayload(MessagePayload::new(
-                            AnyOctetString::new(b"Message Payload 2"),
+                            AnyOctetString::new(b"Message Payload 2".to_vec()),
                         )),
                         MessageDeliveryRequestTlvValue::CallbackNumPresInd(
                             CallbackNumPresInd::new(
@@ -402,7 +404,7 @@ mod tests {
 
     #[test]
     fn short_message_length() {
-        let short_message = OctetString::new(b"Short Message").unwrap();
+        let short_message = OctetString::new(b"Short Message".to_vec()).unwrap();
 
         let submit_sm = DeliverSm::builder()
             .short_message(short_message.clone())
@@ -414,8 +416,8 @@ mod tests {
 
     #[test]
     fn short_message_override() {
-        let short_message_1 = OctetString::new(b"Short Message 101").unwrap();
-        let short_message_2 = OctetString::new(b"Short Message 2").unwrap();
+        let short_message_1 = OctetString::new(b"Short Message 101".to_vec()).unwrap();
+        let short_message_2 = OctetString::new(b"Short Message 2".to_vec()).unwrap();
 
         let submit_sm = DeliverSm::builder()
             .short_message(short_message_1)
@@ -428,8 +430,8 @@ mod tests {
 
     #[test]
     fn message_payload_suppresses_short_message() {
-        let short_message = OctetString::new(b"Short Message").unwrap();
-        let message_payload = MessagePayload::new(AnyOctetString::new(b"Message Payload"));
+        let short_message = OctetString::new(b"Short Message".to_vec()).unwrap();
+        let message_payload = MessagePayload::new(AnyOctetString::new(b"Message Payload".to_vec()));
 
         // Using push_tlv
         let deliver_sm = DeliverSm::builder()
